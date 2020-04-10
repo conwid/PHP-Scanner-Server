@@ -1,0 +1,67 @@
+#!/bin/bash
+# Only tested on stock install of xubuntu 12.04.1
+# if you have 
+cd /proc # some random place to make sure full path of file is recieved (line 9)
+if [ -z "$1" ];then
+	echo "usage:"
+	echo "	`basename $0` /path/to/PHP-Server-Scanner-*.tar.bz2"
+	exit
+elif [ ! -f "$1" ];then
+	echo "404:"
+	echo "file not found"
+	exit
+fi
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root"
+   exit
+fi
+cd ~
+echo "If you are already running a web server on this system you should not use this script"
+echo "`basename $0` has only been tested on stock install of xubuntu 12.04.1 64bit"
+read -p "Press [Enter] to attempt to install"
+apt-get install -y imagemagick sane-utils apache2 php5 php5-curl tesseract-ocr tar zip php-fpdf libpaper-utils grep sed coreutils
+mkdir -p /home/www-data/php-scanner
+echo "ServerName localhost" > /etc/apache2/sites-available/php-scanner
+echo "<VirtualHost *:80>" >> /etc/apache2/sites-available/php-scanner
+echo "	ServerAdmin webmaster@localhost" >> /etc/apache2/sites-available/php-scanner
+echo "	DocumentRoot /home/www-data/php-scanner" >> /etc/apache2/sites-available/php-scanner
+echo "	<Directory />" >> /etc/apache2/sites-available/php-scanner
+echo "		Options FollowSymLinks" >> /etc/apache2/sites-available/php-scanner
+echo "		AllowOverride None" >> /etc/apache2/sites-available/php-scanner
+echo "	</Directory>" >> /etc/apache2/sites-available/php-scanner
+echo "	<Directory /home/www-data/php-scanner/>" >> /etc/apache2/sites-available/php-scanner
+echo "		Options Indexes FollowSymLinks MultiViews" >> /etc/apache2/sites-available/php-scanner
+echo "		AllowOverride All" >> /etc/apache2/sites-available/php-scanner
+echo "		Order allow,deny" >> /etc/apache2/sites-available/php-scanner
+echo "		allow from all" >> /etc/apache2/sites-available/php-scanner
+echo "	</Directory>" >> /etc/apache2/sites-available/php-scanner
+echo "	ErrorLog /var/log/apache2/error.log" >> /etc/apache2/sites-available/php-scanner
+echo "	CustomLog /var/log/apache2/access.log combined" >> /etc/apache2/sites-available/php-scanner
+echo "</VirtualHost>" >> /etc/apache2/sites-available/php-scanner
+ln -s ../sites-available/php-scanner /etc/apache2/sites-enabled/000-php-scanner
+rm /etc/apache2/sites-enabled/000-default
+adduser www-data lp
+service apache2 restart
+cd /home/www-data/php-scanner
+tar xvjf "$1"
+cd /usr/local/bin/
+tar xvjf /home/www-data/php-scanner/scanner-access-enabler-*.tar.bz2
+dir="`ls | grep scanner-access-enabler-`"
+cd "$dir"
+mkdir -p /usr/local/share/applications/
+mv ./*.desktop /usr/local/share/applications/
+mv ./* ../
+cd ..
+rmdir "$dir"
+chown www-data /home/www-data/php-scanner/scans
+chown -R www-data /home/www-data/php-scanner/config
+read -p "Press [Enter] when all scanners are ON"
+echo "Checking to see if scanner-access-enabler is needs to run at boot..."
+scanner-access-enabler -s > /dev/null
+if [ $? -eq 0 ];then
+	sed '/^[^#]*exit 0/i scanner-access-enabler -s \&' -i /etc/rc.local
+fi
+echo "Installation complete"
+echo "Go to http://localhost/?page=Config"
+echo "You may delete `basename $0` at your leisure"
+exit

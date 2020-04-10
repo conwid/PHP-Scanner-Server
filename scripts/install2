@@ -1,0 +1,134 @@
+#!/bin/bash
+# Only tested on stock install of Ubuntu 14.04 64bit
+cd /proc # some random place to make sure full path of file is recieved (line 8)
+if [ -z "$BASH_VERSION" ];then
+	echo "Run this script with bash, not sh!"
+	exit
+fi
+if [ -z "$1" ];then
+	echo "Usage:"
+	echo "	`basename $0` /path/to/PHP-Scanner-Server-*.tar.lzma"
+	echo "Accepts: .tar.lzma .tar.bz2 .tar.gz and .zip"
+	exit
+elif [ ! -f "$1" ];then
+	echo "404:"
+	echo "file not found"
+	exit
+fi
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root"
+   exit
+fi
+cd ~
+echo "If you are already running a web server on this system you should not use this script"
+echo "`basename $0` has only been tested on stock install of Ubuntu 16.04 64bit"
+read -p "Press [Enter] to attempt to install"
+apt-get update
+php=$(apt-cache policy php | grep Candidate | wc -l);
+if [ $php -gt 0 ];then
+	# PHP7 in ubuntu 16.04+
+	php="php php-curl libapache2-mod-php"
+else
+	# PHP5 in < 16.04
+	php="php5 php5-curl"
+fi
+for i in tesseract-ocr imagemagick sane-utils apache2 $php php-fpdf tar zip libpaper-utils grep sed coreutils usbutils; do
+	state=$(apt-cache policy $i | grep Installed)
+	if [ -n "$state" ];then
+		state=$(echo `apt-cache policy $i |grep Installed|cut -d':' -f2`)
+		if [ "$state" == "(none)" ];then
+			apt-get install -y $i
+			state=$(echo `apt-cache policy $i |grep Installed|cut -d':' -f2`)
+			if [ "$state" == "(none)" ];then
+				echo "Failed to install $i"
+				read -p "Press [Enter] to continue or [Ctrl]+[C] to abort"
+			fi
+		fi
+	else
+		echo "Unable to find $i, check your software sources, Ubuntu users make sure Universe in enabled"
+		echo " * Not having tesseract-ocr prevents scanning to txt format"
+		echo " * Not having php-fpdf prevents downloading formatted PDF files"
+		read -p "Press [Enter] to continue or [Ctrl]+[C] to abort"
+	fi
+done
+mkdir -p /home/www-data/php-scanner
+if [ $(ls /etc/apache2/sites-available/*.conf 2> /dev/null | wc -l) -eq 0 ];then
+	file="/etc/apache2/sites-available/php-scanner"
+	echo "ServerName localhost" > $file
+	echo "<VirtualHost *:80>" >> $file
+	echo "	ServerAdmin webmaster@localhost" >> $file
+	echo "	DocumentRoot /home/www-data/php-scanner" >> $file
+	echo "	<Directory />" >> $file
+	echo "		Options FollowSymLinks" >> $file
+	echo "		AllowOverride None" >> $file
+	echo "	</Directory>" >> $file
+	echo "	<Directory /home/www-data/php-scanner/>" >> $file
+	echo "		Options Indexes FollowSymLinks MultiViews" >> $file
+	echo "		AllowOverride All" >> $file
+	echo "		Order allow,deny" >> $file
+	echo "		allow from all" >> $file
+	echo "	</Directory>" >> $file
+	echo "	ErrorLog /var/log/apache2/error.log" >> $file
+	echo "	CustomLog /var/log/apache2/access.log combined" >> $file
+	echo "</VirtualHost>" >> $file
+	ln -s ../sites-available/php-scanner /etc/apache2/sites-enabled/000-php-scanner
+	rm /etc/apache2/sites-enabled/000-default
+else
+	file="/etc/apache2/sites-available/001-php-scanner.conf"
+	echo "<VirtualHost *:80>" >> $file
+	echo "	#ServerName www.example.com" >> $file
+	echo "" >> $file
+	echo "	ServerAdmin webmaster@localhost" >> $file
+	echo "	DocumentRoot /home/www-data/php-scanner" >> $file
+	echo "" >> $file
+	echo "	<Directory /home/www-data/php-scanner/>" >> $file
+	echo "		Options Indexes FollowSymLinks" >> $file
+	echo "		AllowOverride All" >> $file
+	echo "		Require all granted" >> $file
+	echo "	</Directory>" >> $file
+	echo "	ErrorLog ${APACHE_LOG_DIR}/error.log" >> $file
+	echo "	CustomLog ${APACHE_LOG_DIR}/access.log combined" >> $file
+	echo "</VirtualHost>" >> $file
+	ln -s ../sites-available/001-php-scanner.conf /etc/apache2/sites-enabled/
+	rm /etc/apache2/sites-enabled/000-default.conf
+fi
+if [ ! -f /etc/apache2/mods-enabled/headers.load ];then
+	ln -s ../mods-available/headers.load /etc/apache2/mods-enabled/
+fi
+adduser www-data lp
+service apache2 restart
+cd /home/www-data/php-scanner
+if [ "${1: -9}" == ".tar.lzma" ];then
+	tar --lzma -xvf "$1"
+elif [ $"{1: -8}" == ".tar.bz2" ];then
+	tar xvjf "$1"
+elif [ "${1: -7}" == ".tar.gz" ];then
+	tar -zxvf "$1"
+elif [ "${1: -4}" == ".zip" ];then
+	unzip "$1"
+else
+	echo -e "Unknown archive format\nExtract '$1' to '$(pwd)/'\nThen run the commands in this script starting at line 105 and ending at line 117"
+	exit
+fi
+if [ -d './PHP-Scanner-Server-master' ];then
+	mv ./PHP-Scanner-Server-master/* ./
+	mv ./PHP-Scanner-Server-master/.htaccess ./
+	rmdir ./PHP-Scanner-Server-master
+	mkdir ./scans
+	mkdir ./config
+	
+fi
+chown www-data /home/www-data/php-scanner/scans
+chown -R www-data /home/www-data/php-scanner/config
+cd /tmp
+tar xvjf /home/www-data/php-scanner/scanner-udev-rule-maker.tar.bz2
+chmod +x ./scanner-udev-rule-maker
+read -p "Press [Enter] when all scanners are ON"
+echo "Checking for libusb scanners to set permissions on"
+echo "This can take minute (40-47 seconds in my experience)"
+./scanner-udev-rule-maker
+rm ./scanner-udev-rule-maker
+echo "Installation complete"
+echo "Go to http://localhost/?page=Config"
+echo "You may delete `basename $0` at your leisure"
+exit

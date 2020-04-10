@@ -1,0 +1,123 @@
+#!/bin/bash
+# Only tested on xubuntu 13.10 Alpha 1
+
+function printFiles {
+	for file in $files;do
+		if [ -d $file ];then
+			echo -e "\t\033[1;34m$file\033[0m"
+		else
+			echo -e "\t$file"
+		fi
+	done
+}
+echo "Only tested on xubuntu 13.10 Alpha 1"
+if [ "$(id -u)" != "0" ]; then
+	echo "This script must be run as root"
+	exit
+fi
+if [ ${#1} -eq 0 ];then
+	echo "Insert full path to the '.tar.bz2', '.tar.lzma', '.tar.gz', or '.zip' file with the update, or type git to download the latest copy"
+	read update
+else
+	update="$1"
+fi
+cd /proc
+if [ -f "$update" ];then
+	echo "Found $update"
+	echo "I will assume it is the correct file"
+elif [ "$update" == "git" ];then
+	if [ ! -f /usr/bin/git ];then
+		apt-get install git -y
+	fi
+	echo "Will install via git, I will assume you have a working Internet connection"
+else
+	echo "$update is not a file or 'git'"
+	exit
+fi
+echo "Press enter to continue"
+read input
+clear
+path="/home/www-data/php-scanner"
+if [ ${#2} -gt 0  ];then
+	if [ ! -d "$2" ];then
+		path="$2"
+	fi
+fi
+if [ ! -d $path ];then
+	path="/home/www-data/PHP-Scanner-Server"
+fi
+if [ ! -d $path ];then
+	path="/var/www"
+fi
+echo "Found '$path' as the installed location, it contains:"
+cd $path
+files=$(ls -1A ./)
+printFiles
+echo "If this is correct press enter, if not insert the correct location then press enter"
+read input
+clear
+if [ ${#input} -gt 0 ];then
+	path="$input"
+	if [ ! -d $path ];then
+		echo "$path is not a directory"
+		exit
+	fi
+	cd $path
+	files=$(ls -1A ./)
+	echo "$path contains:"
+	printFiles
+	echo "If this is correct type 'yes' and press enter, anything else means no"
+	read input
+	if [ "$input" != "yes" ];then
+		echo "$input is not yes aborting"
+		exit
+	fi
+	clear
+fi
+for file in $files;do
+	if [ "$file" == "config" ] || [ "$file" == "scans" ];then
+		continue
+	fi
+	rm -rf ./"$file"
+done
+if [ "$update" == "git" ];then
+	git clone git://github.com/GM-Script-Writer-62850/PHP-Scanner-Server
+	rm -rf ./PHP-Scanner-Server/.git
+	files=$(ls -1A ./PHP-Scanner-Server)
+	for file in $files;do
+		mv ./PHP-Scanner-Server/$file ./
+	done
+	rmdir ./PHP-Scanner-Server
+else
+	if [ "${update: -9}" == ".tar.lzma" ];then
+		tar --lzma -xvf "$update"
+	elif [ "${update: -7}" == ".tar.gz" ];then
+		tar zxvf "$update"
+	elif [ "${update: -4}" == ".zip" ];then
+		unzip "$update"
+	elif [ "${update: -8}" == ".tar.bz2" ];then
+		tar xvjf "$update"
+	else
+		echo "ERROR: Unknown file type"
+		echo "Just extract/copy files to $path"
+		echo "The old copy has been removed"
+		exit
+	fi
+	if [ -d ./PHP-Scanner-Server-master ];then
+		files=$(ls -1A ./PHP-Scanner-Server-master)
+		for file in $files;do
+			mv ./PHP-Scanner-Server-master/$file ./
+		done
+		rmdir ./PHP-Scanner-Server-master
+	fi
+fi
+if [ ! -f /etc/apache2/mods-enabled/headers.load ];then
+	ln -s ../mods-available/headers.load /etc/apache2/mods-enabled/
+	service apache2 restart
+fi
+clear
+echo "Update complete, assuming you gave me the correct update file"
+echo "these are the new files in $path"
+files=$(ls -1A ./)
+printFiles
+exit
