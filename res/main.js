@@ -607,7 +607,7 @@ function sourceChange(ele){
 			default:
 				text=modes[i];
 		}
-		html1+='<option value="'+modes[i]+'"'+(def?(settings.mode==modes[i]?' selected="selected"':''):'')+'>'+text+'</option>';
+		html1+='<option value="'+modes[i]+'"'+(def?(settings.mode==modes[i]?' selected="selected"':''):(modes[i]=='Gray'?' selected="selected"':''))+'>'+text+'</option>';                
 	}
 	// Change Paper Size
 	papers=Array();
@@ -627,7 +627,7 @@ function sourceChange(ele){
 	html3='';
 	dpi=info['DPI-'+ele.value].split('|');
 	for(i=0,max=dpi.length;i<max;i++)
-		html3+='<option value="'+dpi[i]+'"'+(def?(settings.quality==dpi[i]?' selected="selected"':''):'')+'>'+dpi[i]+' '+(isNaN(dpi[i])?'':'DPI')+'</option>';
+	html1+='<option value="'+modes[i]+'"'+(def?(settings.mode==modes[i]?' selected="selected"':''):(modes[i]=='Gray'?' selected="selected"':''))+'>'+text+'</option>';                
 	// Change Duplex
 	duplex=typeof(info['DUPLEX-'+ele.value])=='boolean'?Array(false,true):info['DUPLEX-'+ele.value].split('|');
 	html4='';
